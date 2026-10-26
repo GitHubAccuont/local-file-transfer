@@ -1,4 +1,4 @@
-package org.example;
+package org.example.tests;
 
 import org.example.transfer.connection.entity.frame.Frame;
 import org.example.transfer.connection.entity.frame.FrameType;

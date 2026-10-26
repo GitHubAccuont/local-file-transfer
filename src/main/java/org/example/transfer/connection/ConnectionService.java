@@ -1,7 +1,6 @@
 package org.example.transfer.connection;
 
 import org.example.transfer.connection.entity.frame.Frame;
-import org.example.transfer.connection.entity.frame.FrameType;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -10,26 +9,25 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.zip.DataFormatException;
 
 import static org.example.transfer.utils.FrameCodec.readFrame;
 import static org.example.transfer.utils.TransferUtils.*;
 
 // Represents connected devices
-class ConnectionService {
+public class ConnectionService {
     private ServerSocket serverSocket;
     private volatile boolean running = false;
     private Thread listenerThread;
     private ExecutorService executor;
 
-    void start(int port) throws IOException {
+    public void start(int port) throws IOException {
 
+        running = true;
         serverSocket = new ServerSocket(port);
 
         executor = Executors.newFixedThreadPool(4);
         listenerThread = new Thread(this::acceptLoop, "listener");
         listenerThread.start();
-        running = true;
     }
 
     private void acceptLoop() {
@@ -50,24 +48,32 @@ class ConnectionService {
     }
 
     private void handleIncoming(Socket s) throws IOException {
+        try (InputStream in = new BufferedInputStream(s.getInputStream())) {
         while (running) {
-            try (InputStream in = new BufferedInputStream(s.getInputStream())) {
+
                 Frame f = readFrame(in);
                 switch (f.getType()) {
                     case MESSAGE:
-                        saveText(f.getPayload());
+                        showMessage(f.getPayload());
                         break;
                     default:
                         throw new IOException("Unsopported format of transfer was recieved");
                 }
             }
         }
+        catch (IOException e){
+            System.out.println("[DEBUG]: Connection ended or broke");
+        }
     }
 
-    void stop() throws IOException, InterruptedException {
+    public void stop() throws IOException, InterruptedException {
         running = false;
         serverSocket.close();
         listenerThread.join();
         executor.shutdown();
+    }
+
+    public int boundPort(){
+        return serverSocket.getLocalPort();
     }
 }
