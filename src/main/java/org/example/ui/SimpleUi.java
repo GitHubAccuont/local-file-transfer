@@ -58,6 +58,7 @@ public class SimpleUi {
 
         setupSidePanel();
         mainPanel.add(sidePanel, BorderLayout.EAST);
+        
     }
 
     private void setupSidePanel() {
