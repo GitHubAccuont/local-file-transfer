@@ -11,7 +11,7 @@ import java.nio.file.Files;
 public class FrameCodec {
 
     //Max size set to 1 Mb
-    private static final int MAX_FRAME_SIZE = 1 * 1024 * 1024;
+    private static final int MAX_FRAME_SIZE = 1024 * 1024;
     // Max size set to 256 Kb
     private static final int BUFFER_SIZE = 256 * 1024;
 
@@ -36,19 +36,19 @@ public class FrameCodec {
         if (payload.length != frameLength) {
             throw new IOException("Input contains shorter payload than specified one");
         }
-        Frame frame = new Frame(frameType, payload);
-        return frame;
+        return new Frame(frameType, payload);
 
     }
 
-    private static void writeFrame(Frame frame, OutputStream stream) throws IOException {
+    public static void writeFrame(Frame frame, OutputStream out) throws IOException {
 
-        stream.write(frame.getType().getCode());
-        stream.write(ByteBuffer.allocate(4).putInt(frame.getPayload().length).array());
-        stream.write(frame.getPayload());
-        stream.flush();
+        out.write(frame.getType().getCode());
+        out.write(ByteBuffer.allocate(4).putInt(frame.getPayload().length).array());
+        out.write(frame.getPayload());
+        out.flush();
 
     }
+
 
     public static void writeMessageAsFrame(String text, OutputStream out) throws IOException {
 

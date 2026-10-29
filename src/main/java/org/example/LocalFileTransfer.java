@@ -11,8 +11,9 @@ public class LocalFileTransfer {
     public static void main(String[] args) {
 
         SwingUtilities.invokeLater(() -> {
-            SimpleUi ui = new SimpleUi();
-            JFrame frame = new JFrame("LAN file transferrer");
+            int port = args.length > 0 ? Integer.parseInt(args[0]) : 9000;
+            SimpleUi ui = new SimpleUi(port);
+            JFrame frame = new JFrame("LAN file transferrer:" + port);
             frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
             frame.setContentPane(ui.getMainPanel());
             frame.pack();
@@ -20,7 +21,8 @@ public class LocalFileTransfer {
             frame.setVisible(true);
 
             frame.addWindowListener(new WindowAdapter() {
-                @Override public void windowClosing(WindowEvent e) {
+                @Override
+                public void windowClosing(WindowEvent e) {
                     ui.shutdown();
                 }
             });

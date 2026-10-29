@@ -7,11 +7,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import static org.example.transfer.utils.FrameCodec.readFrame;
-import static org.example.transfer.utils.TransferUtils.*;
 
 // Represents connected devices
 public class ConnectionService {
@@ -19,50 +20,37 @@ public class ConnectionService {
     private volatile boolean running = false;
     private Thread listenerThread;
     private ExecutorService executor;
+    private Socket peerSocket;
 
-    public void start(int port) throws IOException {
+    public void start(int port, Consumer<Frame> handler) throws IOException {
 
         running = true;
         serverSocket = new ServerSocket(port);
 
         executor = Executors.newFixedThreadPool(4);
-        listenerThread = new Thread(this::acceptLoop, "listener");
+        listenerThread = new Thread(() -> acceptLoop(handler), "listener");
         listenerThread.start();
     }
 
-    private void acceptLoop() {
+    private void acceptLoop(Consumer<Frame> handler) {
         while (running) {
             try {
                 Socket s = serverSocket.accept();
                 executor.submit(() -> {
                     try {
-                        handleIncoming(s);
+                        try (InputStream in = new BufferedInputStream(s.getInputStream())) {
+                            while (running) {
+                                Frame f = readFrame(in);
+                                handler.accept(f);
+                            }
+                        }
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+                        if(!running) return;
                     }
                 });
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            } catch (IOException e) {
+                if(!running) return;
             }
-        }
-    }
-
-    private void handleIncoming(Socket s) throws IOException {
-        try (InputStream in = new BufferedInputStream(s.getInputStream())) {
-        while (running) {
-
-                Frame f = readFrame(in);
-                switch (f.getType()) {
-                    case MESSAGE:
-                        showMessage(f.getPayload());
-                        break;
-                    default:
-                        throw new IOException("Unsopported format of transfer was recieved");
-                }
-            }
-        }
-        catch (IOException e){
-            System.out.println("[DEBUG]: Connection ended or broke");
         }
     }
 
@@ -73,7 +61,7 @@ public class ConnectionService {
         executor.shutdown();
     }
 
-    public int boundPort(){
+    public int boundPort() {
         return serverSocket.getLocalPort();
     }
 }

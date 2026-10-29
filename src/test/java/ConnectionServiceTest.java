@@ -1,9 +1,7 @@
-package org.example.tests;
-
 import org.example.transfer.connection.ConnectionService;
 import org.example.transfer.connection.entity.frame.Frame;
 import org.example.transfer.connection.entity.frame.FrameType;
-import org.example.transfer.utils.TransferUtils;
+import org.example.transfer.utils.MessageUtils;
 
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -28,7 +26,7 @@ public class ConnectionServiceTest {
      */
     private static List<String> captureMessages(int expectedCount) {
         List<String> received = new ArrayList<>();
-        TransferUtils.messageSink = received::add;
+        MessageUtils.messageSink = received::add;
         return received;
     }
 
@@ -46,7 +44,7 @@ public class ConnectionServiceTest {
             waitFor(received, 1);
         } finally {
             service.stop();
-            TransferUtils.messageSink = null;
+            MessageUtils.messageSink = null;
         }
         assertEquals(List.of("hello"), received, "testSingleMessage");
         System.out.println("testSingleMessage PASSED");
@@ -67,7 +65,7 @@ public class ConnectionServiceTest {
             waitFor(received, 2);
         } finally {
             service.stop();
-            TransferUtils.messageSink = null;
+            MessageUtils.messageSink = null;
         }
         assertEquals(List.of("first", "second"), received, "testTwoBackToBackMessages");
         System.out.println("testTwoBackToBackMessages PASSED");
@@ -97,7 +95,7 @@ public class ConnectionServiceTest {
             }
         } finally {
             service.stop();
-            TransferUtils.messageSink = null;
+            MessageUtils.messageSink = null;
         }
         assertEquals(List.of("after-break"), received, "testTruncatedFrameClosesCleanly");
         System.out.println("testTruncatedFrameClosesCleanly PASSED");
