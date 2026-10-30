@@ -1,8 +1,4 @@
-package org.example.transfer.connection.entity.frame;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
+package org.example.transfer.dto.entity.frame;
 
 public class Frame {
 

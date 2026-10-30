@@ -1,5 +1,6 @@
-package org.example.transfer.connection;
+package org.example.transfer.service;
 
+/* TODO: Add this*/
 // mDNS to probe local network for existing devices
 public class DiscoveryService {
 

@@ -1,7 +1,7 @@
 package org.example.transfer.utils;
 
-import org.example.transfer.connection.entity.frame.Frame;
-import org.example.transfer.connection.entity.frame.FrameType;
+import org.example.transfer.dto.entity.frame.Frame;
+import org.example.transfer.dto.entity.frame.FrameType;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -11,7 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-public class FileReceiver {
+public class ReceiveUtils {
 
     private static final int FILENAME_LIMIT = 1_000_000;
     private final Path receiveDir = Path.of(System.getProperty("user.home"), "received");
@@ -23,6 +23,9 @@ public class FileReceiver {
     private boolean receiving = false;
     private Path tempFilePath = null;
 
+    public static String frameToMessage(Frame f) {
+        return new String(f.getPayload(), StandardCharsets.UTF_8);
+    }
 
     public void startProcessing(Frame frame) throws IOException {
         if (frame == null || frame.getType() != FrameType.FILE_HEADER || frame.getPayload() == null) {

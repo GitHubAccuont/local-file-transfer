@@ -1,6 +1,6 @@
-import org.example.transfer.connection.ConnectionService;
-import org.example.transfer.connection.entity.frame.Frame;
-import org.example.transfer.connection.entity.frame.FrameType;
+import org.example.transfer.dto.entity.frame.Frame;
+import org.example.transfer.dto.entity.frame.FrameType;
+import org.example.transfer.service.ConnectionService;
 import org.example.transfer.utils.MessageUtils;
 
 import java.net.Socket;
@@ -55,6 +55,7 @@ public class ConnectionServiceTest {
 
         ConnectionService service = new ConnectionService();
         service.start(0);
+
         int port = service.boundPort();
         try (Socket s = new Socket("localhost", port)) {
             // both frames in one write burst — this is what triggers the buffer bug

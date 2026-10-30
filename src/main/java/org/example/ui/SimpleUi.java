@@ -1,27 +1,31 @@
 package org.example.ui;
 
-import org.example.transfer.connection.ConnectionService;
-import org.example.transfer.connection.entity.frame.Frame;
-import org.example.transfer.utils.FileReceiver;
+import org.example.transfer.dto.Connection;
+import org.example.transfer.dto.ConnectionListener;
+import org.example.transfer.dto.entity.frame.Frame;
+import org.example.transfer.service.ConnectionService;
+import org.example.transfer.utils.ReceiveUtils;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 
 import static javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER;
 import static javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED;
-import static org.example.transfer.utils.FrameCodec.*;
+import static org.example.transfer.utils.ReceiveUtils.frameToMessage;
+import static org.example.transfer.utils.SendUtils.sendFileAsFrames;
+import static org.example.transfer.utils.SendUtils.sendMessageAsFrames;
 
+/*TODO: Fis UI minor bugs, add desc*/
 public class SimpleUi {
 
-    private final static int DEFAULT_PORT = 0;
-    boolean reading;
+
+    private final ConnectionService connectionService;
+    private final ConnectionListener listener;
     // Utils classes (1 for now)
-    FileReceiver fileReceiver;
+    ReceiveUtils receiveUtils;
     private JPanel mainPanel;
     private JPanel sidePanel;
     // Create connection part
@@ -33,24 +37,37 @@ public class SimpleUi {
     private JButton selectButton;
     private JLabel fileInfoLabel;
     private JButton sendFileButton;
-    // Chat panel parts
-    private JScrollPane chatScroll;
     private JTextArea chatBox;
     private JTextField messageInput;
     private JButton sendMessageButton;
     //connection related
-    private Socket peerSocket;
-    private ConnectionService connectionService;
+    private Connection activeConnection;
 
 
     public SimpleUi(int port) {
+        this.listener = new ConnectionListener() {
+            @Override
+            public void onFrame(Frame f) {
+                handleFrame(f);
+            }
+
+            @Override
+            public void onClosed() {
+                SwingUtilities.invokeLater(SimpleUi.this::onConnectionClosed);
+            }
+        };
         setupUi();
 
-        fileReceiver = new FileReceiver();
+        receiveUtils = new ReceiveUtils();
+
+        connectionService = new ConnectionService();
         try {
-            connectionService = new ConnectionService();
-            connectionService.start(port, this::handleFrame);
-        } catch (IOException e) {
+            connectionService.start(port, socket -> {
+                Connection c = new Connection(socket, listener);
+                SwingUtilities.invokeLater(() -> onInboundConnected(c));
+                return c;
+            });
+        } catch (IOException ignored) {
         }
     }
 
@@ -103,7 +120,7 @@ public class SimpleUi {
 
     private void addConnectionListeners() {
         connectButton.addActionListener(e -> {
-            if (peerSocket != null) {
+            if (activeConnection != null) {
                 onConnectionClosed();
                 return;
             }
@@ -123,28 +140,15 @@ public class SimpleUi {
             new Thread(() -> {
                 try {
                     Socket s = new Socket(host, port);
-                    SwingUtilities.invokeLater(() -> onConnected(s));
+                    activeConnection = new Connection(s, listener);
+                    activeConnection.start();
+                    SwingUtilities.invokeLater(this::updateConnectionState);
                 } catch (IOException ex) {
                     SwingUtilities.invokeLater(() -> onConnectFailed(ex));
                 }
             }, "connect-thread").start();
         });
     }
-
-
-    private void startRecieving(Socket s) {
-        new Thread(() -> {
-            try (InputStream in = s.getInputStream()) {
-                while (reading) {
-                    Frame f = readFrame(in);
-                    handleFrame(f);          // see bug 2
-                }
-            } catch (IOException e) {
-                SwingUtilities.invokeLater(() -> onConnectionClosed());
-            }
-        }, "peer-reader").start();
-    }
-
 
     private void setupChat() {
 
@@ -157,7 +161,8 @@ public class SimpleUi {
         chatBox.setLineWrap(true);
         chatBox.setWrapStyleWord(true);
 
-        chatScroll = new JScrollPane(chatBox, VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
+        // Chat panel parts
+        JScrollPane chatScroll = new JScrollPane(chatBox, VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
 
         messageInput = new JTextField();
         messageInput.setToolTipText("Input your messages here");
@@ -181,9 +186,19 @@ public class SimpleUi {
     private void setupChatControls() {
 
         sendMessageButton.addActionListener(e -> {
-
-            sendMessage(messageInput.getText());
-            messageInput.setText("");
+            String text = messageInput.getText();
+            if (text.isEmpty()) return;
+            if (activeConnection == null) {
+                appendMessage("system", "not connected");
+                return;
+            }
+            try {
+                sendMessageAsFrames(activeConnection, text);
+                appendMessage("me", text);
+                messageInput.setText("");
+            } catch (IOException exception) {
+                appendMessage("system", "sends failed:" + exception);
+            }
         });
     }
 
@@ -246,7 +261,7 @@ public class SimpleUi {
         try {
             connectionService.stop();
             onConnectionClosed();
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException | InterruptedException ignored) {
         }
     }
 
@@ -260,59 +275,51 @@ public class SimpleUi {
         try {
             switch (f.getType()) {
                 case MESSAGE:
-                    String text = new String(f.getPayload(), StandardCharsets.UTF_8);
-                    SwingUtilities.invokeLater(() -> appendMessage("remote", text));
+                    SwingUtilities.invokeLater(() -> appendMessage("remote", frameToMessage(f)));
                     break;
                 case FILE_HEADER:
-                    fileReceiver.startProcessing(f);
+                    receiveUtils.startProcessing(f);
                     break;
                 case FILE_CHUNK:
-                    fileReceiver.processNextFrame(f);
+                    receiveUtils.processNextFrame(f);
                     break;
                 case FILE_END:
-                    fileReceiver.endProcessing(f);
-                    SwingUtilities.invokeLater(() -> appendMessage("system", "file recieved"));
+                    receiveUtils.endProcessing(f);
+                    SwingUtilities.invokeLater(() -> appendMessage("system", "file received"));
                     break;
                 default:
                     throw new IOException("Incorrect frame was caught");
             }
         } catch (IOException e) {
-            fileReceiver.reset();
+            receiveUtils.reset();
             SwingUtilities.invokeLater(() -> appendMessage("system", "transfer failed: " + e.getMessage()));
         }
     }
 
     // Methods related to sending
 
-    private void sendMessage(String text) {
-        try {
-            if (peerSocket != null && peerSocket.isBound()) {
-                writeMessageAsFrame(text, peerSocket.getOutputStream());
-                appendMessage("me", text);
-            }
-        } catch (IOException e) {
-            appendMessage("system", "send failed: " + e.getMessage());
-            onConnectionClosed();
-        }
-    }
-
     private void sendFile() {
-        if (selected == null || peerSocket == null) return;
+        if (selected == null || activeConnection == null) return;
         File f = selected;
         selected = null;
         sendFileButton.setEnabled(false);
         appendMessage("system", "sending " + f.getName() + " ...");
-        Socket s = peerSocket;
+        Connection c = activeConnection;
         new Thread(() -> {
             try {
-
-                writeFileAsFrame(s.getOutputStream(), f);
+                sendFileAsFrames(c, f);
                 SwingUtilities.invokeLater(() -> appendMessage("system", "sent " + f.getName()));
-
             } catch (IOException ex) {
                 SwingUtilities.invokeLater(() -> appendMessage("system", "send failed: " + ex.getMessage()));
             }
         }, "file-send").start();
+    }
+
+    // Method(s) related to callbacks from server socket to UI
+    private void onInboundConnected(Connection c) {
+        activeConnection = c;
+        appendMessage("system", "connected");
+        updateConnectionState();
     }
 
 
@@ -322,39 +329,26 @@ public class SimpleUi {
         appendMessage("system", "connect failed: " + ex.getMessage());
         connectButton.setEnabled(true);
         connectButton.setText("Connect");
-        reading = false;
+        updateConnectionState();
     }
 
-
-    private void onConnected(Socket s) {
-        peerSocket = s;
-        reading = true;
-        startRecieving(s);
-        appendMessage("system", "connected");
-        connectButton.setText("Disconnect");
+    private void updateConnectionState() {
+        boolean connected = activeConnection != null && activeConnection.isOpen();
+        connectButton.setText(connected ? "Disconnect" : "Connect");
         connectButton.setEnabled(true);
-        messageInput.setEnabled(true);
-        sendMessageButton.setEnabled(true);
-        selectButton.setEnabled(true);
-        sendFileButton.setEnabled(selected != null);
+        messageInput.setEnabled(connected);
+        sendMessageButton.setEnabled(connected);
+        selectButton.setEnabled(connected);
+        sendFileButton.setEnabled(connected && selected != null);
     }
 
 
     private void onConnectionClosed() {
-        Socket s = peerSocket;
-        peerSocket = null;
-        reading = false;
-        if (s != null) try {
-            s.close();
-        } catch (IOException ignored) {
-        }
-        fileReceiver.reset();
+        Connection c = activeConnection;
+        activeConnection = null;
+        if (c != null) c.close();
+        receiveUtils.reset();
         appendMessage("system", "connection closed");
-        connectButton.setText("Connect");
-        connectButton.setEnabled(true);
-        messageInput.setEnabled(false);
-        sendMessageButton.setEnabled(false);
-        selectButton.setEnabled(false);
-        sendFileButton.setEnabled(false);
+        updateConnectionState();
     }
 }

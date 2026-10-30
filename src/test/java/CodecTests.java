@@ -1,8 +1,10 @@
-import org.example.transfer.connection.entity.frame.Frame;
-import org.example.transfer.connection.entity.frame.FrameType;
+import org.example.transfer.dto.entity.frame.Frame;
+import org.example.transfer.dto.entity.frame.FrameType;
 import org.example.transfer.utils.FrameCodec;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -10,12 +12,12 @@ public class CodecTests {
 
 
     public static void main(String[] args) {
-    try {
+        try {
 
-        testMessage();
-    } catch (Exception e) {
-        throw new RuntimeException(e);
-    }
+            testMessage();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
@@ -25,7 +27,7 @@ public class CodecTests {
         byte[] payload = testText.getBytes(StandardCharsets.UTF_8);
         int length = payload.length;
 
-        Frame testFrame = new Frame(FrameType.MESSAGE,payload);
+        Frame testFrame = new Frame(FrameType.MESSAGE, payload);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         FrameCodec.writeFrame(testFrame, out);

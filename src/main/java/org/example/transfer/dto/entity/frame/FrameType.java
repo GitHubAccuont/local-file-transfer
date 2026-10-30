@@ -1,4 +1,4 @@
-package org.example.transfer.connection.entity.frame;
+package org.example.transfer.dto.entity.frame;
 
 import java.util.Arrays;
 
@@ -21,7 +21,7 @@ public enum FrameType {
         return Arrays.stream(FrameType.values()).filter(e -> e.code == code).findFirst().orElse(UNKNOWN);
     }
 
-    public byte getCode(){
+    public byte getCode() {
         return code;
     }
 }
