@@ -18,7 +18,6 @@ import static org.example.transfer.utils.ReceiveUtils.frameToMessage;
 import static org.example.transfer.utils.SendUtils.sendFileAsFrames;
 import static org.example.transfer.utils.SendUtils.sendMessageAsFrames;
 
-/*TODO: Fis UI minor bugs, add desc*/
 public class SimpleUi {
 
 
