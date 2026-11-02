@@ -1,10 +1,12 @@
 package org.example.ui;
 
 import org.example.transfer.dto.Connection;
-import org.example.transfer.dto.ConnectionListener;
-import org.example.transfer.dto.entity.frame.Frame;
-import org.example.transfer.service.ConnectionService;
+import org.example.transfer.dto.Peer;
+import org.example.transfer.dto.frame.Frame;
+import org.example.transfer.service.ConnectionServer;
+import org.example.transfer.service.DiscoveryService;
 import org.example.transfer.utils.ReceiveUtils;
+import org.example.ui.element.DiscoveryPanel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -18,13 +20,25 @@ import static org.example.transfer.utils.ReceiveUtils.frameToMessage;
 import static org.example.transfer.utils.SendUtils.sendFileAsFrames;
 import static org.example.transfer.utils.SendUtils.sendMessageAsFrames;
 
+/**
+ * UI class for the app, it should work correctly since it's not using any dependencies and does not have
+ * a lot of borders/ pixel offsets that could mess the GUI after resizing.
+ * There are some commentaries, but it's better to just run app and see UI before trying to get it by code. UI stores some of classes
+ * inside as fields since we need link between UI and services that callback for UI updates upon any connection/disovery.
+ * Those classes are {@link ConnectionServer} and {@link DiscoveryService}. There is also a small implementation for {@link org.example.transfer.dto.Connection.ConnectionListener}
+ * which is used to trace back to UI any new connection and reflect it appropriately.
+ * All the connections calls within UI are made in new threads to prevent clogging the UI's EDT.
+ *
+ */
 public class SimpleUi {
 
 
-    private final ConnectionService connectionService;
-    private final ConnectionListener listener;
-    // Utils classes (1 for now)
+    private final DiscoveryService discoveryService;
+    private final ConnectionServer connectionServer;
+    // Utils classes (1 for now as only recieving requires any states to keep going)
     ReceiveUtils receiveUtils;
+    // Discovery service parts
+    DiscoveryPanel discoveryPanel;
     private JPanel mainPanel;
     private JPanel sidePanel;
     // Create connection part
@@ -39,12 +53,28 @@ public class SimpleUi {
     private JTextArea chatBox;
     private JTextField messageInput;
     private JButton sendMessageButton;
-    //connection related
+    //connection related vars
     private Connection activeConnection;
+    private final Connection.ConnectionListener connectionListener;
 
 
-    public SimpleUi(int port) {
-        this.listener = new ConnectionListener() {
+    public SimpleUi(int port, String name) {
+
+        setupUi();
+        // Adding all callbacks and listeners to used classes
+        discoveryService = new DiscoveryService(name, port, new DiscoveryService.Listener() {
+            @Override
+            public void onPeerDiscovered(Peer p) {
+                SwingUtilities.invokeLater(() -> discoveryPanel.addPeer(p));
+            }
+
+            @Override
+            public void onPeerLost(Peer p) {
+                SwingUtilities.invokeLater(() -> discoveryPanel.removePeer(p));
+            }
+        });
+        // Callbacks to UI from new/closed Connections
+        this.connectionListener = new Connection.ConnectionListener() {
             @Override
             public void onFrame(Frame f) {
                 handleFrame(f);
@@ -55,19 +85,22 @@ public class SimpleUi {
                 SwingUtilities.invokeLater(SimpleUi.this::onConnectionClosed);
             }
         };
-        setupUi();
+
 
         receiveUtils = new ReceiveUtils();
 
-        connectionService = new ConnectionService();
+        connectionServer = new ConnectionServer();
         try {
-            connectionService.start(port, socket -> {
-                Connection c = new Connection(socket, listener);
+            connectionServer.start(port, socket -> {
+                Connection c = new Connection(socket, connectionListener);
                 SwingUtilities.invokeLater(() -> onInboundConnected(c));
                 return c;
             });
+
+            discoveryService.start();
         } catch (IOException ignored) {
         }
+        // Actual UI setup moved here
     }
 
     private void setupUi() {
@@ -77,6 +110,7 @@ public class SimpleUi {
         mainPanel.setPreferredSize(new Dimension(900, 600));
 
         setupChat();
+
 
         setupSidePanel();
         mainPanel.add(sidePanel, BorderLayout.EAST);
@@ -91,9 +125,13 @@ public class SimpleUi {
 
         setupConnPanel();
 
+        discoveryPanel = new DiscoveryPanel(this::connectPeer);
+        sidePanel.add(discoveryPanel, BorderLayout.CENTER);
+
         setupFileTransferPanel();
 
     }
+
 
     private void setupConnPanel() {
 
@@ -139,7 +177,7 @@ public class SimpleUi {
             new Thread(() -> {
                 try {
                     Socket s = new Socket(host, port);
-                    activeConnection = new Connection(s, listener);
+                    activeConnection = new Connection(s, connectionListener);
                     activeConnection.start();
                     SwingUtilities.invokeLater(this::updateConnectionState);
                 } catch (IOException ex) {
@@ -223,7 +261,7 @@ public class SimpleUi {
         fileTransferPanel.add(buttonRow);
         fileTransferPanel.add(Box.createVerticalGlue());
 
-        sidePanel.add(fileTransferPanel, BorderLayout.CENTER);
+        sidePanel.add(fileTransferPanel, BorderLayout.SOUTH);
 
         setupFileTransferListeners();
     }
@@ -258,7 +296,7 @@ public class SimpleUi {
 
     public void shutdown() {
         try {
-            connectionService.stop();
+            connectionServer.stop();
             onConnectionClosed();
         } catch (IOException | InterruptedException ignored) {
         }
@@ -314,23 +352,7 @@ public class SimpleUi {
         }, "file-send").start();
     }
 
-    // Method(s) related to callbacks from server socket to UI
-    private void onInboundConnected(Connection c) {
-        activeConnection = c;
-        appendMessage("system", "connected");
-        updateConnectionState();
-    }
-
-
-    //Methods related to connection inside UI, will be moved and handled in separate class in future versions
-
-    private void onConnectFailed(IOException ex) {
-        appendMessage("system", "connect failed: " + ex.getMessage());
-        connectButton.setEnabled(true);
-        connectButton.setText("Connect");
-        updateConnectionState();
-    }
-
+    // UI method to update on connect/disconnect
     private void updateConnectionState() {
         boolean connected = activeConnection != null && activeConnection.isOpen();
         connectButton.setText(connected ? "Disconnect" : "Connect");
@@ -341,6 +363,38 @@ public class SimpleUi {
         sendFileButton.setEnabled(connected && selected != null);
     }
 
+
+    //Methods related to connection inside UI, will be moved and handled in separate class in future versions
+
+    private void onInboundConnected(Connection c) {
+        activeConnection = c;
+        appendMessage("system", "connected");
+        updateConnectionState();
+    }
+
+    private void onConnectFailed(IOException ex) {
+        appendMessage("system", "connect failed: " + ex.getMessage());
+        connectButton.setEnabled(true);
+        connectButton.setText("Connect");
+        updateConnectionState();
+    }
+
+    private void connectPeer(Peer p) {
+        if (activeConnection != null) {
+            appendMessage("system", "disconnect first");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Socket s = new Socket(p.getAddress(), p.getTcpPort());
+                Connection c = new Connection(s, connectionListener);
+                c.start();
+                SwingUtilities.invokeLater(() -> onInboundConnected(c));
+            } catch (IOException ex) {
+                SwingUtilities.invokeLater(() -> onConnectFailed(ex));
+            }
+        }, "connect-thread").start();
+    }
 
     private void onConnectionClosed() {
         Connection c = activeConnection;

@@ -1,5 +1,5 @@
-import org.example.transfer.dto.entity.frame.Frame;
-import org.example.transfer.dto.entity.frame.FrameType;
+import org.example.transfer.dto.frame.Frame;
+import org.example.transfer.dto.frame.FrameType;
 import org.example.transfer.utils.FrameCodec;
 
 import java.io.ByteArrayInputStream;

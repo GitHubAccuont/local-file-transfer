@@ -7,8 +7,15 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.function.Function;
 
-// Represents connected devices
-public class ConnectionService {
+/**
+ * The connection service implementation. It's responsible for running the server socket.
+ * Any live connection made whether its inbound (to our server) or outbound(made by us) is stored within and represented by lifecycle of
+ * {@link Connection} class. Input for {@code start()} function takes the port along the factory function
+ * which is not really needed for it to work, but is one of better ways to give us callbacks to reflect new connections in UI.
+ * At the time limit of connection is 1 whether its inbound or outbound but that can be changed with some UI changes and adding connection storage.
+ *
+ */
+public class ConnectionServer {
     private ServerSocket serverSocket;
     private volatile boolean running = false;
     private Thread listenerThread;

@@ -15,8 +15,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/* TODO: Add this*/
-// mDNS to probe local network for existing devices
+/**
+ * Simple implementation of discovery service. Since we dont really have any
+ * need for packages to be fed or sent properly udp is used here. Messages could in theory be entangled
+ * but since its small project made just for LAN transfer it shouldn't be happening in most cases.
+ * <p>
+ * Discovery service used to add automatically new discovered peers (with same app running) over LAN
+ * by transferring packets with UDP across {@code 255.255.255.255} address which should send it to anyone in net.
+ * the stored found {@link Peer} instances are stored within the simple map where they added as {@code <Peer,lastSeen> entries}
+ * (the self-caught broadcast is ignored). One of constructor parameters for it calls for instance of the
+ * inlined listener interface (same as for Connection) to allow the feedback to UI without storing logic in there instead.
+ *
+ */
 public class DiscoveryService {
 
     private static final int DISCOVERY_PORT = 9001;

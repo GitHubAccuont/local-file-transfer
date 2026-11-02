@@ -1,6 +1,6 @@
 package org.example.transfer.dto;
 
-import org.example.transfer.dto.entity.frame.Frame;
+import org.example.transfer.dto.frame.Frame;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,6 +9,12 @@ import java.net.Socket;
 import static org.example.transfer.utils.FrameCodec.readFrame;
 import static org.example.transfer.utils.FrameCodec.writeFrame;
 
+/**
+ * Class representing any live connection going (out/in) with other same app instance.
+ * There is no auto reconnect and connection is dropped in case some unexpected behavior happens during transfer.
+ * {@code sendLock}
+ *
+ */
 public class Connection {
 
     private final Socket socket;
@@ -72,5 +78,11 @@ public class Connection {
 
     public boolean isOpen() {
         return open;
+    }
+
+    public interface ConnectionListener {
+        void onFrame(Frame f);
+
+        void onClosed();
     }
 }

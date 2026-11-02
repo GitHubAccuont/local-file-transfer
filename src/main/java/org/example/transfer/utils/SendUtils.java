@@ -1,8 +1,8 @@
 package org.example.transfer.utils;
 
 import org.example.transfer.dto.Connection;
-import org.example.transfer.dto.entity.frame.Frame;
-import org.example.transfer.dto.entity.frame.FrameType;
+import org.example.transfer.dto.frame.Frame;
+import org.example.transfer.dto.frame.FrameType;
 
 import java.io.File;
 import java.io.FileInputStream;

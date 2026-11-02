@@ -1,7 +1,7 @@
 package org.example.transfer.utils;
 
-import org.example.transfer.dto.entity.frame.Frame;
-import org.example.transfer.dto.entity.frame.FrameType;
+import org.example.transfer.dto.frame.Frame;
+import org.example.transfer.dto.frame.FrameType;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,6 +9,12 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
+
+/**
+ * Utility class to write/read {@link Frame} instances in/out the data streams we get from connections.
+ * Read has few checks to prevent some random bytes recieved being taken as the valid data.
+ *
+ */
 public class FrameCodec {
 
     //Max size set to 1 Mb
