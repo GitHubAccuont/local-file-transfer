@@ -12,7 +12,7 @@ public class LocalFileTransfer {
 
         SwingUtilities.invokeLater(() -> {
             int port = args.length > 0 ? Integer.parseInt(args[0]) : 9000;
-            String name = args.length > 1 ? args[1]:"LANM";
+            String name = args.length > 1 ? args[1]:"LAN Transferrer instance";
             SimpleUi ui = new SimpleUi(port, name);
             JFrame frame = new JFrame("LAN file transferrer:" + port);
             frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);

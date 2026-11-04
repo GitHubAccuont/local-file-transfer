@@ -26,6 +26,7 @@ public class DiscoveryPanel extends JPanel {
     }
 
     public void addPeer(Peer p) {
+        if (model.contains(p)) return;
         model.addElement(p);
     }
 

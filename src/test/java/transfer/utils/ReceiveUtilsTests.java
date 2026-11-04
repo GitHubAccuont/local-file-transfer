@@ -25,7 +25,14 @@ public class ReceiveUtilsTests {
 
     @BeforeEach
     public void instantiateNewUtils() {
-        this.testUtils = new ReceiveUtils(tempDir);
+        this.testUtils = new ReceiveUtils(tempDir, new ReceiveUtils.ReceiveListener() {
+            @Override
+            public void onFileStarted(String fileName, long expectedSize) {}
+            @Override
+            public void onFileFinished(String fileName) {}
+            @Override
+            public void onTransferError(String reason) {}
+        });
     }
 
     @Test
@@ -49,9 +56,9 @@ public class ReceiveUtilsTests {
         Frame fileChunk = new Frame(FrameType.FILE_CHUNK, fileText);
         Frame fileEnd = new Frame(FrameType.FILE_END, new byte[0]);
 
-        testUtils.startProcessing(fileHeader);
-        testUtils.processNextFrame(fileChunk);
-        testUtils.endProcessing(fileEnd);
+        testUtils.processFrame(fileHeader);
+        testUtils.processFrame(fileChunk);
+        testUtils.processFrame(fileEnd);
 
         String fileNameStr = new String(fileName, StandardCharsets.UTF_8);
         Path expectedFilePath = tempDir.resolve(fileNameStr);
@@ -68,14 +75,14 @@ public class ReceiveUtilsTests {
         Frame chunk = new Frame(FrameType.FILE_CHUNK, "random text".getBytes(StandardCharsets.UTF_8));
         Frame end = new Frame(FrameType.FILE_END, new byte[0]);
 
-        assertThrows(IOException.class, () -> testUtils.processNextFrame(chunk));
-        assertThrows(IOException.class, () -> testUtils.endProcessing(end));
+        assertThrows(IOException.class, () -> testUtils.processFrame(chunk));
+        assertThrows(IOException.class, () -> testUtils.processFrame(end));
     }
 
     @Test
     public void testIncorrectHeader() {
         Frame badHeader = new Frame(FrameType.FILE_HEADER, new byte[]{1, 2, 3});
-        assertThrows(BufferUnderflowException.class, () -> testUtils.startProcessing(badHeader));
+        assertThrows(BufferUnderflowException.class, () -> testUtils.processFrame(badHeader));
     }
 
     @Test
@@ -86,7 +93,7 @@ public class ReceiveUtilsTests {
         buffer.put(new byte[10]);
 
         Frame badHeader = new Frame(FrameType.FILE_HEADER, buffer.array());
-        assertThrows(IOException.class, () -> testUtils.startProcessing(badHeader));
+        assertThrows(IOException.class, () -> testUtils.processFrame(badHeader));
     }
 
     @Test
@@ -103,9 +110,9 @@ public class ReceiveUtilsTests {
         Frame fileChunk = new Frame(FrameType.FILE_CHUNK, fileText);
         Frame fileEnd = new Frame(FrameType.FILE_END, new byte[0]);
 
-        testUtils.startProcessing(fileHeader);
-        testUtils.processNextFrame(fileChunk);
-        testUtils.endProcessing(fileEnd);
+        testUtils.processFrame(fileHeader);
+        testUtils.processFrame(fileChunk);
+        testUtils.processFrame(fileEnd);
 
         Path safePath = tempDir.resolve("evil.txt");
         assertTrue(Files.exists(safePath), "File should be sanitized and saved inside tempDir");

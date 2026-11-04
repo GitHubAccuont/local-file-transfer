@@ -14,9 +14,9 @@ import java.nio.file.StandardCopyOption;
 public class ReceiveUtils {
 
     private static final int FILENAME_LIMIT = 1_000_000;
-    // Previously was user's home directory (subdirectory recieved was created on first file transfer)
-    // Path.of(System.getProperty("user.home"), "received");
     private final Path receiveDir;
+    private final ReceiveListener listener;
+
     private OutputStream currentOut;
     private long expectedBytes;
     private long receivedBytes;
@@ -25,21 +25,42 @@ public class ReceiveUtils {
     private boolean receiving = false;
     private Path tempFilePath = null;
 
-    public ReceiveUtils(Path sendPath){
-        receiveDir = sendPath;
+    public ReceiveUtils(Path sendPath, ReceiveListener listener) {
+        this.receiveDir = sendPath;
+        this.listener = listener;
     }
 
     public static String frameToMessage(Frame f) {
         return new String(f.getPayload(), StandardCharsets.UTF_8);
     }
 
-    public void startProcessing(Frame frame) throws IOException {
-        if (frame == null || frame.getType() != FrameType.FILE_HEADER || frame.getPayload() == null) {
+    public void processFrame(Frame frame) throws IOException {
+        try {
+            switch (frame.getType()) {
+                case FILE_HEADER:
+                    startProcessing(frame);
+                    break;
+                case FILE_CHUNK:
+                    processNextFrame(frame);
+                    break;
+                case FILE_END:
+                    endProcessing(frame);
+                    break;
+                default:
+                    throw new IOException("ReceiveUtils received an unsupported frame type: " + frame.getType());
+            }
+        } catch (IOException e) {
             reset();
+            listener.onTransferError(e.getMessage());
+            throw e;
+        }
+    }
+
+    private void startProcessing(Frame frame) throws IOException {
+        if (frame == null || frame.getType() != FrameType.FILE_HEADER || frame.getPayload() == null) {
             throw new IOException("Incorrect input on file transfer start");
         }
         if (receiving) {
-            reset();
             throw new IOException("Received another file header during transfer");
         }
         ByteBuffer payload = ByteBuffer.wrap(frame.getPayload());
@@ -55,7 +76,6 @@ public class ReceiveUtils {
         Path safe = Path.of(currentFileName).getFileName();
         if (safe == null || safe.toString().isEmpty()
                 || safe.toString().equals(".") || safe.toString().equals("..")) {
-            reset();
             throw new IOException("invalid filename");
         }
         currentFileName = safe.toString();
@@ -68,33 +88,35 @@ public class ReceiveUtils {
         tempFilePath = receiveDir.resolve(currentFileName + ".part");
         currentOut = Files.newOutputStream(tempFilePath);
         receiving = true;
+
+        listener.onFileStarted(currentFileName, expectedBytes);
     }
 
-    public void processNextFrame(Frame frame) throws IOException {
+    private void processNextFrame(Frame frame) throws IOException {
         if (!receiving) {
             throw new IOException("Received file chunks before any headers");
         }
         if (frame == null || frame.getType() != FrameType.FILE_CHUNK || frame.getPayload() == null) {
-            reset();
             throw new IOException("Received empty Frame");
         }
         currentOut.write(frame.getPayload());
         receivedBytes += frame.getPayload().length;
     }
 
-    public void endProcessing(Frame frame) throws IOException {
+    private void endProcessing(Frame frame) throws IOException {
         if (frame == null || frame.getType() != FrameType.FILE_END || !receiving) {
-            reset();
             throw new IOException("Incorrect input on file transfer");
         }
         if (receivedBytes != expectedBytes) {
-            reset();
-            throw new IOException("Mistmatch in expected vs received bytes");
+            throw new IOException("Mismatch in expected vs received bytes");
         }
         currentOut.close();
         Files.move(tempFilePath, currentFilePath, StandardCopyOption.REPLACE_EXISTING);
         tempFilePath = null;
+        receiving = false;
         reset();
+
+        listener.onFileFinished(currentFileName);
     }
 
     public void reset() {
@@ -119,5 +141,17 @@ public class ReceiveUtils {
         receivedBytes = 0;
         currentFileName = null;
         currentFilePath = null;
+    }
+
+    public boolean isReceiving() {
+        return receiving;
+    }
+
+    public interface ReceiveListener {
+        void onFileStarted(String fileName, long expectedSize);
+
+        void onFileFinished(String fileName);
+
+        void onTransferError(String reason);
     }
 }

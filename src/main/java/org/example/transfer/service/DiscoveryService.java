@@ -7,16 +7,14 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Simple implementation of discovery service. Since we dont really have any
+ * Simple implementation of discovery service. Since we don't really have any
  * need for packages to be fed or sent properly udp is used here. Messages could in theory be entangled
  * but since its small project made just for LAN transfer it shouldn't be happening in most cases.
  * <p>
@@ -33,20 +31,25 @@ public class DiscoveryService {
     private static final long ANNOUNCE_INTERVAL_MS = 2000;
     private static final long PEER_TIMEOUT_MS = 6000;
     private static final int EXPECTED_MESSAGE_LENGTH_LIMIT = 1024;
-    private static final String LAN_ADRESS = "255.255.255.255";
+    private static final String LAN_ADDRESS = "255.255.255.255";
+
+    private final UUID myId;
     private final String myName;
     private final int myTcpPort;
+
     private final Listener listener;
     private final Map<Peer, Long> peers = new ConcurrentHashMap<>();
     private DatagramSocket socket;
     private Thread listenThread;
     private ScheduledExecutorService scheduler;
+
     private volatile boolean running = false;
 
     public DiscoveryService(String myName, int myTcpPort, Listener listener) {
         this.myName = myName;
         this.myTcpPort = myTcpPort;
         this.listener = listener;
+        myId =  UUID.randomUUID();
     }
 
     public void start() throws IOException {
@@ -72,10 +75,12 @@ public class DiscoveryService {
                 String msg = new String(p.getData(), 0, p.getLength(), StandardCharsets.UTF_8);
                 if (msg.startsWith("HELLO")) {
                     String[] parts = msg.split(" ");
-                    if (parts.length != 3) throw new IOException("Wrong message was recieved for connection");
+                    if (parts.length != 4) throw new IOException("Wrong message was recieved for connection");
                     int port = Integer.parseInt(parts[2]);
                     String name = parts[1];
-                    Peer peer = new Peer(p.getAddress(), port, name);
+                    UUID id = UUID.fromString(parts[3]);
+                    if(id.equals(myId)) continue;
+                    Peer peer = new Peer(p.getAddress(), port, name, id);
                     Long previous = peers.put(peer, System.currentTimeMillis());
                     if (previous == null) {
                         listener.onPeerDiscovered(peer);
@@ -87,13 +92,13 @@ public class DiscoveryService {
     }
 
     private void announce() {
-        byte[] messageBytes = String.format("HELLO %s %d", myName, myTcpPort).getBytes(StandardCharsets.UTF_8);
+        byte[] messageBytes = String.format("HELLO %s %d %s", myName, myTcpPort, myId).getBytes(StandardCharsets.UTF_8);
         try {
             DatagramPacket helloMessage =
                     new DatagramPacket(
                             messageBytes,
                             messageBytes.length,
-                            InetAddress.getByName(LAN_ADRESS),
+                            InetAddress.getByName(LAN_ADDRESS),
                             DISCOVERY_PORT
                     );
             socket.send(helloMessage);

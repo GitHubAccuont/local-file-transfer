@@ -3,6 +3,7 @@ package org.example.ui;
 import org.example.transfer.dto.Connection;
 import org.example.transfer.dto.Peer;
 import org.example.transfer.dto.frame.Frame;
+import org.example.transfer.dto.frame.FrameType;
 import org.example.transfer.service.ConnectionServer;
 import org.example.transfer.service.DiscoveryService;
 import org.example.transfer.utils.ReceiveUtils;
@@ -21,10 +22,11 @@ import static org.example.transfer.utils.ReceiveUtils.frameToMessage;
 import static org.example.transfer.utils.SendUtils.sendFileAsFrames;
 import static org.example.transfer.utils.SendUtils.sendMessageAsFrames;
 
+
 /**
  * UI class for the app, it should work correctly since it's not using any dependencies and does not have
  * a lot of borders/ pixel offsets that could mess the GUI after resizing.
- * There are some commentaries, but it's better to just run app and see UI before trying to get it by code. UI stores some of classes
+ * There are some commentaries, but it's better to just run app and see UI before trying to get it by code. UI stores some of the classes
  * inside as fields since we need link between UI and services that callback for UI updates upon any connection/disovery.
  * Those classes are {@link ConnectionServer} and {@link DiscoveryService}. There is also a small implementation for {@link org.example.transfer.dto.Connection.ConnectionListener}
  * which is used to trace back to UI any new connection and reflect it appropriately.
@@ -54,15 +56,16 @@ public class SimpleUi {
     private JTextArea chatBox;
     private JTextField messageInput;
     private JButton sendMessageButton;
+
+    private final static Path DEFAULT_PATH = Path.of(System.getProperty("user.home"), "received");
     //connection related vars
     private Connection activeConnection;
     private final Connection.ConnectionListener connectionListener;
 
 
     public SimpleUi(int port, String name) {
-
         setupUi();
-        // Adding all callbacks and listeners to used classes
+
         discoveryService = new DiscoveryService(name, port, new DiscoveryService.Listener() {
             @Override
             public void onPeerDiscovered(Peer p) {
@@ -74,11 +77,15 @@ public class SimpleUi {
                 SwingUtilities.invokeLater(() -> discoveryPanel.removePeer(p));
             }
         });
-        // Callbacks to UI from new/closed Connections
+
         this.connectionListener = new Connection.ConnectionListener() {
             @Override
-            public void onFrame(Frame f) {
-                handleFrame(f);
+            public void onFrame(Frame f) throws IOException {
+                if (f.getType() == FrameType.MESSAGE) {
+                    SwingUtilities.invokeLater(() -> appendMessage("remote", frameToMessage(f)));
+                } else {
+                    receiveUtils.processFrame(f);
+                }
             }
 
             @Override
@@ -87,8 +94,22 @@ public class SimpleUi {
             }
         };
 
+        receiveUtils = new ReceiveUtils(DEFAULT_PATH, new ReceiveUtils.ReceiveListener() {
+            @Override
+            public void onFileStarted(String fileName, long expectedSize) {
+                SwingUtilities.invokeLater(() -> appendMessage("system", "Receiving " + fileName + " (" + expectedSize + " bytes)..."));
+            }
 
-        receiveUtils = new ReceiveUtils(Path.of(System.getProperty("user.home"), "received"));
+            @Override
+            public void onFileFinished(String fileName) {
+                SwingUtilities.invokeLater(() -> appendMessage("system", "File " + fileName + " received successfully"));
+            }
+
+            @Override
+            public void onTransferError(String reason) {
+                SwingUtilities.invokeLater(() -> appendMessage("system", "Transfer failed: " + reason));
+            }
+        });
 
         connectionServer = new ConnectionServer();
         try {
@@ -97,30 +118,22 @@ public class SimpleUi {
                 SwingUtilities.invokeLater(() -> onInboundConnected(c));
                 return c;
             });
-
             discoveryService.start();
         } catch (IOException ignored) {
         }
-        // Actual UI setup moved here
     }
 
     private void setupUi() {
-
         mainPanel = new JPanel();
         mainPanel.setLayout(new BorderLayout(0, 0));
         mainPanel.setPreferredSize(new Dimension(900, 600));
 
         setupChat();
-
-
         setupSidePanel();
         mainPanel.add(sidePanel, BorderLayout.EAST);
-
     }
 
     private void setupSidePanel() {
-
-
         sidePanel = new JPanel(new BorderLayout(10, 10));
         sidePanel.setPreferredSize(new Dimension(350, 0));
 
@@ -130,13 +143,9 @@ public class SimpleUi {
         sidePanel.add(discoveryPanel, BorderLayout.CENTER);
 
         setupFileTransferPanel();
-
     }
 
-
     private void setupConnPanel() {
-
-
         ipField = new JTextField(15);
         ipField.setToolTipText("Enter the ip you will be trying to connect to");
 
@@ -145,9 +154,7 @@ public class SimpleUi {
 
         connectButton = new JButton("Connect");
 
-
         JPanel connectionParamsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-
         connectionParamsPanel.add(ipField);
         connectionParamsPanel.add(portField);
         connectionParamsPanel.add(connectButton);
@@ -189,9 +196,7 @@ public class SimpleUi {
     }
 
     private void setupChat() {
-
         JPanel chatPanel;
-
         JPanel messageControls;
 
         chatBox = new JTextArea(". . .");
@@ -199,7 +204,6 @@ public class SimpleUi {
         chatBox.setLineWrap(true);
         chatBox.setWrapStyleWord(true);
 
-        // Chat panel parts
         JScrollPane chatScroll = new JScrollPane(chatBox, VERTICAL_SCROLLBAR_AS_NEEDED, HORIZONTAL_SCROLLBAR_NEVER);
 
         messageInput = new JTextField();
@@ -217,12 +221,10 @@ public class SimpleUi {
         chatPanel.add(messageControls, BorderLayout.SOUTH);
         mainPanel.add(chatPanel, BorderLayout.CENTER);
 
-
         setupChatControls();
     }
 
     private void setupChatControls() {
-
         sendMessageButton.addActionListener(e -> {
             String text = messageInput.getText();
             if (text.isEmpty()) return;
@@ -235,14 +237,12 @@ public class SimpleUi {
                 appendMessage("me", text);
                 messageInput.setText("");
             } catch (IOException exception) {
-                appendMessage("system", "sends failed:" + exception);
+                appendMessage("system", "send failed: " + exception.getMessage());
             }
         });
     }
 
-
     private void setupFileTransferPanel() {
-
         selectButton = new JButton("Select Files");
         selectButton.setToolTipText("Click to select file for transfer");
 
@@ -254,7 +254,6 @@ public class SimpleUi {
         buttonRow.add(sendFileButton);
 
         fileInfoLabel = new JLabel("No files selected currently");
-
 
         JPanel fileTransferPanel = new JPanel();
         fileTransferPanel.setLayout(new BoxLayout(fileTransferPanel, BoxLayout.Y_AXIS));
@@ -274,7 +273,7 @@ public class SimpleUi {
             if (result == JFileChooser.APPROVE_OPTION) {
                 selected = chooser.getSelectedFile();
                 String name = selected.getName();
-                long bytes = selected.length(); // size in bytes
+                long bytes = selected.length();
 
                 String sizeText = bytes < 1024 ? bytes + " B" : (bytes / 1024) + " KB";
                 fileInfoLabel.setText("<html>" + name + "<br>(" + sizeText + ")</html>");
@@ -303,38 +302,9 @@ public class SimpleUi {
         }
     }
 
-    //Util methods
     private void appendMessage(String user, String messageText) {
-        chatBox.append(String.format("[%s]:%s%n", user, messageText));
+        chatBox.append(String.format("[%s]: %s%n", user, messageText));
     }
-
-    private void handleFrame(Frame f) {
-
-        try {
-            switch (f.getType()) {
-                case MESSAGE:
-                    SwingUtilities.invokeLater(() -> appendMessage("remote", frameToMessage(f)));
-                    break;
-                case FILE_HEADER:
-                    receiveUtils.startProcessing(f);
-                    break;
-                case FILE_CHUNK:
-                    receiveUtils.processNextFrame(f);
-                    break;
-                case FILE_END:
-                    receiveUtils.endProcessing(f);
-                    SwingUtilities.invokeLater(() -> appendMessage("system", "file received"));
-                    break;
-                default:
-                    throw new IOException("Incorrect frame was caught");
-            }
-        } catch (IOException e) {
-            receiveUtils.reset();
-            SwingUtilities.invokeLater(() -> appendMessage("system", "transfer failed: " + e.getMessage()));
-        }
-    }
-
-    // Methods related to sending
 
     private void sendFile() {
         if (selected == null || activeConnection == null) return;
@@ -353,7 +323,6 @@ public class SimpleUi {
         }, "file-send").start();
     }
 
-    // UI method to update on connect/disconnect
     private void updateConnectionState() {
         boolean connected = activeConnection != null && activeConnection.isOpen();
         connectButton.setText(connected ? "Disconnect" : "Connect");
@@ -363,9 +332,6 @@ public class SimpleUi {
         selectButton.setEnabled(connected);
         sendFileButton.setEnabled(connected && selected != null);
     }
-
-
-    //Methods related to connection inside UI, will be moved and handled in separate class in future versions
 
     private void onInboundConnected(Connection c) {
         activeConnection = c;
@@ -398,6 +364,9 @@ public class SimpleUi {
     }
 
     private void onConnectionClosed() {
+        if (receiveUtils.isReceiving()) {
+            appendMessage("system", "file transfer was aborted, connection was lost");
+        }
         Connection c = activeConnection;
         activeConnection = null;
         if (c != null) c.close();

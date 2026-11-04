@@ -81,7 +81,7 @@ public class Connection {
     }
 
     public interface ConnectionListener {
-        void onFrame(Frame f);
+        void onFrame(Frame f) throws IOException;
 
         void onClosed();
     }
