@@ -14,7 +14,9 @@ import java.nio.file.StandardCopyOption;
 public class ReceiveUtils {
 
     private static final int FILENAME_LIMIT = 1_000_000;
-    private final Path receiveDir = Path.of(System.getProperty("user.home"), "received");
+    // Previously was user's home directory (subdirectory recieved was created on first file transfer)
+    // Path.of(System.getProperty("user.home"), "received");
+    private final Path receiveDir;
     private OutputStream currentOut;
     private long expectedBytes;
     private long receivedBytes;
@@ -22,6 +24,10 @@ public class ReceiveUtils {
     private Path currentFilePath;
     private boolean receiving = false;
     private Path tempFilePath = null;
+
+    public ReceiveUtils(Path sendPath){
+        receiveDir = sendPath;
+    }
 
     public static String frameToMessage(Frame f) {
         return new String(f.getPayload(), StandardCharsets.UTF_8);

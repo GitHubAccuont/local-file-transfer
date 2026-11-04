@@ -13,6 +13,7 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.file.Path;
 
 import static javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER;
 import static javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED;
@@ -87,7 +88,7 @@ public class SimpleUi {
         };
 
 
-        receiveUtils = new ReceiveUtils();
+        receiveUtils = new ReceiveUtils(Path.of(System.getProperty("user.home"), "received"));
 
         connectionServer = new ConnectionServer();
         try {
