@@ -153,6 +153,7 @@ public class SimpleUi {
         portField.setToolTipText("Enter the port of address you will be trying to connect to");
 
         connectButton = new JButton("Connect");
+        connectButton.setPreferredSize(new Dimension(100, connectButton.getPreferredSize().height));
 
         JPanel connectionParamsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         connectionParamsPanel.add(ipField);
